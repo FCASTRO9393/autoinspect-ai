@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoInspect AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px; background: #fff; }
+    h1 { text-align: center; margin: 20px 0; color: #1E293B; }
+    .status { text-align: center; color: #16A34A; font-weight: bold; padding: 10px; background: #F0FDF4; border-radius: 8px; margin: 10px 0; }
+    .btn { display: block; width: 100%; padding: 14px; background: #2563EB; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin: 10px 0; }
+    .btn:disabled { background: #94A3B8; }
+    .result { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 15px; margin: 10px 0; white-space: pre-wrap; font-size: 12px; max-height: 400px; overflow: auto; }
+    input[type="file"] { display: none; }
+    img { max-width: 100%; border-radius: 10px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>🚗 AutoInspect AI</h1>
+  <p class="status">✅ Servidor activo — Teste de Análise</p>
+  <p style="text-align:center;color:#64748B;font-size:14px;margin:10px 0;">
+    Tire uma foto de um carro para testar a análise de danos.
+  </p>
+
+  <input type="file" id="fileInput" accept="image/*" capture="environment">
+  <button class="btn" onclick="document.getElementById('fileInput').click()">📸 Tirar Foto</button>
+
+  <img id="preview" style="display:none;">
+  <div id="analyzing" style="display:none;text-align:center;padding:20px;">
+    <p style="font-size:18px;">🔍 A analisar...</p>
+    <p style="color:#64748B;">Aguarde 5-10 segundos</p>
+  </div>
+  <div id="result" class="result" style="display:none;"></div>
+
+  <script>
+    // Comprimir imagem para 1568px, 85% JPEG
+    function compressImage(dataUrl) {
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          const maxPx = 1568;
+          if (w > h) { if (w > maxPx) { h = Math.round(h * (maxPx / w)); w = maxPx; } }
+          else { if (h > maxPx) { w = Math.round(w * (maxPx / h)); h = maxPx; } }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+        };
+        img.src = dataUrl;
+      });
+    }
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Mostrar preview
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const dataUrl = ev.target.result;
+        document.getElementById('preview').src = dataUrl;
+        document.getElementById('preview').style.display = 'block';
+        document.getElementById('analyzing').style.display = 'block';
+        document.getElementById('result').style.display = 'none';
+
+        // Comprimir
+        const base64 = await compressImage(dataUrl);
+
+        // Enviar ao backend
+        try {
+          const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image_base64: base64,
+              position_label: 'Frente'
+            })
+          });
+          const result = await response.json();
+          document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+          document.getElementById('result').style.display = 'block';
+        } catch (err) {
+          document.getElementById('result').textContent = 'Erro: ' + err.message;
+          document.getElementById('result').style.display = 'block';
+        }
+        document.getElementById('analyzing').style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+  </script>
+</body>
+</html>
